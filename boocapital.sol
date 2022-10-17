@@ -31,22 +31,24 @@ contract BooCapitalVotes is Ownable {
         booCapitalNFT = IBooCapitalNFT(_NFTaddress);
     }
 
-    function startBomb(address _firstContenderAddress) public onlyOwner {
+    function startContest(address _firstContenderAddress) public onlyOwner {
+        require(contests[count].isRunning == false, "Current contest still running !");
         count += 1;
-        require(contests[count].isRunning == false, "Contest already started");
+        Contest storage contest = contests[count];
         Contender memory newContender = Contender({
             tokenAddress: _firstContenderAddress,
             votes: 0
         });
-        contests[count].contenders.push(newContender);
-        contests[count].isRunning = true;
+        contest.isRunning = true;
+        contest.contenders.push(newContender);
     }
 
-    function addContender(uint256 _contestId, address _tokenAddress)
+    function addContender(address _tokenAddress)
         public
         onlyOwner
     {
-        Contest storage contest = contests[_contestId];
+        Contest storage contest = contests[count];
+        require(contest.contenders.length < 4, "Max contenders amount reached");
         Contender memory newContender = Contender({
             tokenAddress: _tokenAddress,
             votes: 0
@@ -77,17 +79,29 @@ contract BooCapitalVotes is Ownable {
         contest.contenders[_contenderId].votes = uint32(votingPower);
     }
 
-    function endBomb(uint256 _id) public onlyOwner {
-        Contest storage contest = contests[_id];
+    function endContest() public onlyOwner {
+        Contest storage contest = contests[count];
         contest.isRunning = false;
     }
 
-    function getContest(uint256 _id) public view returns (Contest memory) {
-        Contest storage contest = contests[_id];
-        return contest;
+    function getAllContest() public view returns (Contest[] memory) {
+        Contest[] memory allContestArray = new Contest[](count+1);
+        for(uint i = 1; i < count + 1; i++)
+        {
+            allContestArray[i] = contests[i];
+        }
+        return allContestArray;
     }
 
-    // internal
+    function getCurrentContest() public view returns (Contest memory) {
+        Contest storage currentContest = contests[count];
+        return currentContest;
+    }
+
+    function getContest(uint _id) public view returns (Contest memory) {
+        Contest memory contest = contests[_id];
+        return contest;
+    }
 
     function walletOfNFTOwner(address user)
         internal
