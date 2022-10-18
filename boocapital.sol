@@ -9,6 +9,10 @@ interface IBooCapitalNFT {
     function walletOfOwner(address) external view returns (uint256[] memory);
 }
 
+interface IBooCapitalToken {
+    function balanceOf(address _user) external view returns (uint256);
+}
+
 contract BooCapitalVotes is Ownable {
     struct Contest {
         Contender[] contenders;
@@ -22,17 +26,23 @@ contract BooCapitalVotes is Ownable {
     uint256 public count;
 
     mapping(uint256 => Contest) public contests;
-    mapping(uint256 => mapping(address => uint256[]))
-        public userNFTsUsedForVote;
+    mapping(uint256 => uint256[]) public contestUsedNFTs;
+    mapping(uint256 => mapping(address => bool))
+        public userUsedTokenPowerInContest;
 
     IBooCapitalNFT booCapitalNFT;
+    IBooCapitalToken booCapitalToken;
 
-    constructor(address _NFTaddress) {
+    constructor(address _NFTaddress, address _tokenAddress) {
         booCapitalNFT = IBooCapitalNFT(_NFTaddress);
+        booCapitalToken = IBooCapitalToken(_tokenAddress);
     }
 
     function startContest(address _firstContenderAddress) public onlyOwner {
-        require(contests[count].isRunning == false, "Current contest still running !");
+        require(
+            contests[count].isRunning == false,
+            "Current contest still running !"
+        );
         count += 1;
         Contest storage contest = contests[count];
         Contender memory newContender = Contender({
@@ -43,11 +53,9 @@ contract BooCapitalVotes is Ownable {
         contest.contenders.push(newContender);
     }
 
-    function addContender(address _tokenAddress)
-        public
-        onlyOwner
-    {
+    function addContender(address _tokenAddress) public onlyOwner {
         Contest storage contest = contests[count];
+        require(contest.isRunning == true, "Contest hasn't started yet");
         require(contest.contenders.length < 4, "Max contenders amount reached");
         Contender memory newContender = Contender({
             tokenAddress: _tokenAddress,
@@ -56,27 +64,31 @@ contract BooCapitalVotes is Ownable {
         contest.contenders.push(newContender);
     }
 
-    function vote(
-        uint256 _contestId,
-        uint256 _contenderId,
-        uint256[] memory _userNfts
-    ) public {
-        Contest storage contest = contests[_contestId];
+    function vote(uint256 _contenderId, uint256[] memory _userNfts) public {
+        Contest storage contest = contests[count];
         uint256 votingPower;
+        require(
+            booCapitalToken.balanceOf(msg.sender) > 100000000000000,
+            "Insufficant token balance"
+        );
         require(
             checkIfNftHasVoted(_userNfts) == false,
             "NFT(s) already voted with"
         );
-        require(contest.isRunning == true, "Voting is over");
+        require(contest.isRunning == true, "Contest is over");
+
         for (uint256 i = 0; i < _userNfts.length; i++) {
             require(
                 booCapitalNFT.ownerOf(_userNfts[i]) == msg.sender,
                 "You are not owner of the NFT(s) selected"
             );
+            contestUsedNFTs[count].push(_userNfts[i]);
             votingPower++;
-            userNFTsUsedForVote[count][msg.sender].push(_userNfts[i]);
         }
-        contest.contenders[_contenderId].votes = uint32(votingPower);
+        if (userUsedTokenPowerInContest[count][msg.sender] == false) {
+            contest.contenders[_contenderId].votes += uint32(votingPower++);
+            userUsedTokenPowerInContest[count][msg.sender] = true;
+        } else contest.contenders[_contenderId].votes += uint32(votingPower);
     }
 
     function endContest() public onlyOwner {
@@ -84,10 +96,9 @@ contract BooCapitalVotes is Ownable {
         contest.isRunning = false;
     }
 
-    function getAllContest() public view returns (Contest[] memory) {
-        Contest[] memory allContestArray = new Contest[](count+1);
-        for(uint i = 1; i < count + 1; i++)
-        {
+    function getAllContests() public view returns (Contest[] memory) {
+        Contest[] memory allContestArray = new Contest[](count + 1);
+        for (uint256 i = 1; i < count + 1; i++) {
             allContestArray[i] = contests[i];
         }
         return allContestArray;
@@ -98,7 +109,7 @@ contract BooCapitalVotes is Ownable {
         return currentContest;
     }
 
-    function getContest(uint _id) public view returns (Contest memory) {
+    function getContest(uint256 _id) public view returns (Contest memory) {
         Contest memory contest = contests[_id];
         return contest;
     }
@@ -117,7 +128,7 @@ contract BooCapitalVotes is Ownable {
         view
         returns (bool)
     {
-        uint256[] memory userNFTsUsed = userNFTsUsedForVote[count][msg.sender];
+        uint256[] memory userNFTsUsed = contestUsedNFTs[count];
         bool result;
         for (uint256 ii = 0; ii < _userNfts.length; ii++) {
             for (uint256 jj = 0; jj < userNFTsUsed.length; jj++) {
@@ -125,7 +136,7 @@ contract BooCapitalVotes is Ownable {
                     result = true;
                     break;
                 } else {
-                    if (jj == userNFTsUsed.length - 1) {
+                    if (jj == userNFTsUsed.length) {
                         result = false;
                         continue;
                     }
