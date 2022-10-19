@@ -27,8 +27,7 @@ contract BooCapitalVotes is Ownable {
 
     mapping(uint256 => Contest) public contests;
     mapping(uint256 => uint256[]) public contestUsedNFTs;
-    mapping(uint256 => mapping(address => bool))
-        public userUsedTokenPowerInContest;
+    mapping(uint256 => mapping(address => bool)) contestVoters;
 
     IBooCapitalNFT booCapitalNFT;
     IBooCapitalToken booCapitalToken;
@@ -76,7 +75,15 @@ contract BooCapitalVotes is Ownable {
             "NFT(s) already voted with"
         );
         require(contest.isRunning == true, "Contest is over");
+        require(
+            _userNfts.length > 0 || contestVoters[count][msg.sender] == false,
+            "Can't vote with 0 voting power"
+        );
 
+        if (contestVoters[count][msg.sender] == false) {
+            votingPower = 1;
+            contestVoters[count][msg.sender] = true;
+        }
         for (uint256 i = 0; i < _userNfts.length; i++) {
             require(
                 booCapitalNFT.ownerOf(_userNfts[i]) == msg.sender,
@@ -85,10 +92,7 @@ contract BooCapitalVotes is Ownable {
             contestUsedNFTs[count].push(_userNfts[i]);
             votingPower++;
         }
-        if (userUsedTokenPowerInContest[count][msg.sender] == false) {
-            contest.contenders[_contenderId].votes += uint32(votingPower++);
-            userUsedTokenPowerInContest[count][msg.sender] = true;
-        } else contest.contenders[_contenderId].votes += uint32(votingPower);
+        contest.contenders[_contenderId].votes += uint32(votingPower);
     }
 
     function endContest() public onlyOwner {
@@ -97,11 +101,11 @@ contract BooCapitalVotes is Ownable {
     }
 
     function getAllContests() public view returns (Contest[] memory) {
-        Contest[] memory allContestArray = new Contest[](count + 1);
+        Contest[] memory allContestsArray = new Contest[](count + 1);
         for (uint256 i = 1; i < count + 1; i++) {
-            allContestArray[i] = contests[i];
+            allContestsArray[i] = contests[i];
         }
-        return allContestArray;
+        return allContestsArray;
     }
 
     function getCurrentContest() public view returns (Contest memory) {
@@ -112,6 +116,11 @@ contract BooCapitalVotes is Ownable {
     function getContest(uint256 _id) public view returns (Contest memory) {
         Contest memory contest = contests[_id];
         return contest;
+    }
+
+    // DANGER : only call this when you're sure about the contest you're willing to clear
+    function deleteContest(uint256 _id) public onlyOwner {
+        delete contests[_id];
     }
 
     function walletOfNFTOwner(address user)
