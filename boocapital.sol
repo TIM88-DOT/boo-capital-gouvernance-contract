@@ -63,7 +63,7 @@ contract BooCapitalVotes is Ownable {
         contest.contenders.push(newContender);
     }
 
-    function vote(uint256 _contenderId, uint256[] memory _userNfts) public {
+    function vote(uint256 _contenderId, uint256[] calldata _userNfts) public {
         Contest storage contest = contests[count];
         uint256 votingPower;
         require(
@@ -132,9 +132,9 @@ contract BooCapitalVotes is Ownable {
         return id;
     }
 
-    function checkIfNftHasVoted(uint256[] memory _userNfts)
+    function checkIfNftHasVoted(uint256[] calldata _userNfts)
         public
-        view
+        pure
         returns (bool)
     {
         uint256[] memory userNFTsUsed = contestUsedNFTs[count];
